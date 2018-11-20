@@ -62,12 +62,15 @@ def get_user_info():
     Get the email address of the currently logged-in user.
     '''
     try:
+        #email에 대한 JSON타입의 http response 생성된 값을 response변수에 대입
         response = jsonify({'email': authnz.get_logged_in_user()})
     except authnz.UserUnknownError:
+        #UserUnknownError가 뜰 시 none을 response변수에 대입
         response = jsonify({'email': None})
+    #response 변수 리턴
     return response
 
-
+#클라이언트가 bootstrap하는 것을 도와주기 위해 configuration을 가져온다
 @app.route('/v1/client_config', methods=['GET'])
 @authnz.require_auth
 def get_client_config():
@@ -75,15 +78,21 @@ def get_client_config():
     Get configuration to help clients bootstrap themselves.
     '''
     # TODO: add more config in here.
+    #configuration에 대한 JSON타입의 http response 생성된 값을 response변수에 대입
     response = jsonify({
         'defined': app.config['CLIENT_CONFIG'],
         'generated': {
+            #kms인증키 가져오기
             'kms_auth_manage_grants': app.config['KMS_AUTH_MANAGE_GRANTS'],
+            #aws계정 가져오기
             'aws_accounts': app.config['SCOPED_AUTH_KEYS'].values(),
+            #쿠키 이름 가져오기
             'xsrf_cookie_name': app.config['XSRF_COOKIE_NAME'],
+            #maintenance_mode 값 가져오기
             'maintenance_mode': app.config['MAINTENANCE_MODE']
         }
     })
+    #response 변수 리턴
     return response
 
 
