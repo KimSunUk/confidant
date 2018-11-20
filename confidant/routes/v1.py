@@ -1,15 +1,29 @@
+#python은 기본적으로 json 표준 라이브러리 제공, 라이브러리 사용시 python타입의 object를 json문자열로 변경가능(json인코딩), 또한 json문자열을 다시 python타입으로 변환 가능(json디코딩)
 import json
+#uuid는 기본적으로 어떤 개체(데이터)를 고유하게 식별하는 데 사용되는 16바이트 길이의 숫 예 : 022db29c-d0e2-11e5-bb4c-60f81dca7676
 import uuid
+#객체를 복사하기 위한 용도
 import copy
+#로그를 찍기위한 라이브러리
 import logging
+#base64인코딩,디코딩을 위한 라이브러리
+##인코딩 : 정보의 형태나 형식을 부호화/암호화시킨다, 디코딩 : 부호화/암호화를 해체한다
 import base64
+#정규 표현식을 지원하기 위해 제공되는 모
 import re
 
+#PynamoDB : 파이썬 2와 3을 지원하는 아마존의 DynamoDB의 Pythonic interface
+#PutError->아이템이 생성 실패 시 "Error putting item"이란 말을 올린다.
+#DoesNotExist->아이템의 쿼리가 존제하지 않을 시 "Item does not exitst"이란 말을 올린다.
 from pynamodb.exceptions import PutError, DoesNotExist
+#객체에 담긴 HTTP요청에 대한 상세를  request해주기 위해
 from flask import request
+#플라스크의 목록을 jsonify하기 위한 라이브러리
 from flask import jsonify
+#클라이언트오류에 대한 예외처리를 위한 라이브러리
 from botocore.exceptions import ClientError
 
+#confidant 외부 서비스에 접속을 위한 라이브러리(모듈)
 import confidant.services
 from confidant import keymanager
 from confidant import authnz
@@ -24,12 +38,15 @@ from confidant.models.credential import Credential
 from confidant.models.blind_credential import BlindCredential
 from confidant.models.service import Service
 
+#iam_resource라는 변수에 iam리소스 값을 가져온다
 iam_resource = confidant.services.get_boto_resource('iam')
+#kms_client라는 변수에 클라이언트의 kms인증키를 받아온다
 kms_client = confidant.services.get_boto_client('kms')
 
+#VALUE_LENGTH변수에 50 대입
 VALUE_LENGTH = 50
 
-
+#로그인 흐름에 따라 유저 로그인 시키기
 @app.route('/v1/login', methods=['GET', 'POST'])
 def login():
     '''
