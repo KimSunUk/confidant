@@ -46,7 +46,7 @@ kms_client = confidant.services.get_boto_client('kms')
 #VALUE_LENGTH변수에 50 대입
 VALUE_LENGTH = 50
 
-#로그인 흐름에 따라 유저 로그인 시키기
+#로그인 흐름에 따라 유저 로그인 시키기 위한 함수
 @app.route('/v1/login', methods=['GET', 'POST'])
 def login():
     '''
@@ -54,7 +54,7 @@ def login():
     '''
     return authnz.log_in()
 
-#바로 최근에 로그인 된 유저로부터 이메일주소 정보 가져오기 없으면 None 가져온다
+#바로 최근에 로그인 된 유저로부터 이메일주소 정보 가져오기 없으면 None 가져오기 위한 함수
 @app.route('/v1/user/email', methods=['GET', 'POST'])
 @authnz.require_auth
 def get_user_info():
@@ -70,7 +70,7 @@ def get_user_info():
     #response 변수 리턴
     return response
 
-#클라이언트가 bootstrap하는 것을 도와주기 위해 configuration을 가져온다
+#클라이언트가 bootstrap하는 것을 도와주기 위해 configuration을 가져오기 위한 함수
 @app.route('/v1/client_config', methods=['GET'])
 @authnz.require_auth
 def get_client_config():
@@ -95,7 +95,7 @@ def get_client_config():
     #response 변수 리턴
     return response
 
-
+#service리스트 가져오기 위한 함수
 @app.route('/v1/services', methods=['GET'])
 @authnz.require_auth
 def get_service_list():
