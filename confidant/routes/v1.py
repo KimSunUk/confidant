@@ -54,7 +54,7 @@ def login():
     '''
     return authnz.log_in()
 
-
+#바로 최근에 로그인 된 유저로부터 이메일주소 정보 가져오기 없으면 None 가져온다
 @app.route('/v1/user/email', methods=['GET', 'POST'])
 @authnz.require_auth
 def get_user_info():
