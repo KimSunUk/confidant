@@ -46,7 +46,7 @@ kms_client = confidant.services.get_boto_client('kms')
 #VALUE_LENGTH변수에 50 대입
 VALUE_LENGTH = 50
 
-#로그인 흐름에 따라 유저 로그인 시키기 위한 함수
+#로그인 흐름에 따라 유저 로그인 시키기 위한 함수 정의
 @app.route('/v1/login', methods=['GET', 'POST'])
 def login():
     '''
@@ -54,7 +54,7 @@ def login():
     '''
     return authnz.log_in()
 
-#바로 최근에 로그인 된 유저로부터 이메일주소 정보 가져오기 없으면 None 가져오기 위한 함수
+#바로 최근에 로그인 된 유저로부터 이메일주소 정보 가져오기 없으면 None 가져오기 위한 함수 정의
 @app.route('/v1/user/email', methods=['GET', 'POST'])
 @authnz.require_auth
 def get_user_info():
@@ -70,7 +70,7 @@ def get_user_info():
     #response 변수 리턴
     return response
 
-#클라이언트가 bootstrap하는 것을 도와주기 위해 configuration을 가져오기 위한 함수
+#클라이언트가 bootstrap하는 것을 도와주기 위해 configuration을 가져오기 위한 함수 정의
 @app.route('/v1/client_config', methods=['GET'])
 @authnz.require_auth
 def get_client_config():
@@ -115,9 +115,9 @@ def get_service_list():
     return jsonify({'services': services})
 
 
-#iam_roles_list를 가져오기 위한 함수
 @app.route('/v1/roles', methods=['GET'])
 @authnz.require_auth
+#iam_roles_list를 가져오기 위한 함수 정의
 def get_iam_roles_list():
     try:
         roles = [x.name for x in iam_resource.roles.all()]
@@ -126,9 +126,9 @@ def get_iam_roles_list():
     return jsonify({'roles': roles})
 
 
-#서비스의 메타데이타와 모든 credentials를 가져오기 위한 함수
 @app.route('/v1/services/<id>', methods=['GET'])
 @authnz.require_auth
+#서비스의 메타데이타와 모든 credentials를 가져오기 위한 함수 정의
 def get_service(id):
     '''
     Get service metadata and all credentials for this service. This endpoint
@@ -183,7 +183,7 @@ def get_service(id):
 
 @app.route('/v1/archive/services/<id>', methods=['GET'])
 @authnz.require_auth
-#아카이브 서비스 revision(개정, 정정)가져오기
+#아카이브 서비스 revision(개정, 정정)가져오는 함수 정의
 def get_archive_service_revisions(id):
     try:
         service = Service.get(id)
@@ -224,9 +224,9 @@ def get_archive_service_revisions(id):
         )
     })
 
-#아카이브 서비스 리스트 가져오기
 @app.route('/v1/archive/services', methods=['GET'])
 @authnz.require_auth
+#아카이브 서비스 리스트 가져오는 함수 정의
 def get_archive_service_list():
     services = []
     for service in Service.data_type_date_index.query(
@@ -240,6 +240,7 @@ def get_archive_service_list():
             'modified_date': service.modified_date,
             'modified_by': service.modified_by
         })
+    #servises jsonify시켜 리턴
     return jsonify({'services': services})
 
 
@@ -247,7 +248,7 @@ def get_archive_service_list():
 @authnz.require_auth
 @authnz.require_csrf_token
 @maintenance.check_maintenance_mode
-#안정성 부여 아래 예외처리들로
+#해당 id에 아래 예외처리들로 안정성 부여하는 함수 정의
 def ensure_grants(id):
     try:
         _service = Service.get(id)
@@ -276,6 +277,7 @@ def ensure_grants(id):
 
 @app.route('/v1/grants/<id>', methods=['GET'])
 @authnz.require_auth
+#해당 id grants 가져오는 함수 정의
 def get_grants(id):
     try:
         _service = Service.get(id)
@@ -290,6 +292,7 @@ def get_grants(id):
     except keymanager.ServiceGetGrantError:
         msg = 'Failed to get grants.'
         return jsonify({'error': msg}), 500
+    #id와 grants jsonify시켜 리턴
     return jsonify({
         'id': id,
         'grants': grants
@@ -300,10 +303,13 @@ def get_grants(id):
 @authnz.require_auth
 @authnz.require_csrf_token
 @maintenance.check_maintenance_mode
+#서비스의 credentials mapping 하는 함수 정의
 def map_service_credentials(id):
+    #json 데이터 받아오기
     data = request.get_json()
     try:
         _service = Service.get(id)
+        #서비스가 아니라면 error
         if _service.data_type != 'service':
             msg = 'id provided is not a service.'
             return jsonify({'error': msg}), 400
@@ -313,6 +319,7 @@ def map_service_credentials(id):
         revision = 1
         _service_credential_ids = []
 
+#존제하는 credentials가 있다면 제어문 안으로
     if data.get('credentials') or data.get('blind_credentials'):
         conflicts = _pair_key_conflicts_for_credentials(
             data.get('credentials', []),
@@ -332,6 +339,7 @@ def map_service_credentials(id):
 
     # If this is the first revision, we should attempt to create a grant for
     # this service.
+    #첫 번째 revision인 경우 허가를 부여하기 위한 예외처리
     if revision == 1:
         try:
             keymanager.ensure_grants(id)
@@ -394,6 +402,7 @@ def map_service_credentials(id):
 
 @app.route('/v1/credentials', methods=['GET'])
 @authnz.require_auth
+#credential리스트 가져오기 함수 정의
 def get_credential_list():
     credentials = []
     for cred in Credential.data_type_date_index.query('credential'):
@@ -413,6 +422,7 @@ def get_credential_list():
 
 @app.route('/v1/credentials/<id>', methods=['GET'])
 @authnz.require_auth
+#credential id가져오기 함수 정의
 def get_credential(id):
     try:
         cred = Credential.get(id)
@@ -455,6 +465,7 @@ def get_credential(id):
 
 @app.route('/v1/archive/credentials/<id>', methods=['GET'])
 @authnz.require_auth
+#아카이브 credential revisions 가져오기 함수 정의
 def get_archive_credential_revisions(id):
     try:
         cred = Credential.get(id)
@@ -492,6 +503,7 @@ def get_archive_credential_revisions(id):
 
 @app.route('/v1/archive/credentials', methods=['GET'])
 @authnz.require_auth
+#아카이브 credential list 가져오기 함수 정의
 def get_archive_credential_list():
     credentials = []
     for cred in Credential.data_type_date_index.query(
@@ -507,7 +519,7 @@ def get_archive_credential_list():
         })
     return jsonify({'credentials': credentials})
 
-
+#credentials 가져오는 함수 정의
 def _get_credentials(credential_ids):
     credentials = []
     with stats.timer('service_batch_get_credentials'):
@@ -532,7 +544,7 @@ def _get_credentials(credential_ids):
             })
     return credentials
 
-
+#blind_credentials 가져오는 함수 정의
 def _get_blind_credentials(credential_ids):
     credentials = []
     with stats.timer('service_batch_get_blind_credentials'):
@@ -553,15 +565,19 @@ def _get_blind_credentials(credential_ids):
             })
     return credentials
 
-
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 def _pair_key_conflicts_for_credentials(credential_ids, blind_credential_ids):
+    #conflicts, pair_keys 라는 dictionary생성(key-value)
     conflicts = {}
     pair_keys = {}
     # If we don't care about conflicts, return immediately
+    #conflicts에 대하여 상관하지않는다면 즉시 리턴
     if app.config['IGNORE_CONFLICTS']:
         return conflicts
     # For all credentials, get their credential pairs and track which
+    # 모든 credentials에 대해서, 각각의 credential 쌍을 얻는다
     # credentials have which keys
+    #credential이 which keys를 가지고 있다.
     credentials = _get_credentials(credential_ids)
     credentials.extend(_get_blind_credentials(blind_credential_ids))
     for credential in credentials:
@@ -580,6 +596,8 @@ def _pair_key_conflicts_for_credentials(credential_ids, blind_credential_ids):
                 pair_keys[key] = [data]
     # Iterate the credential pair keys, if there's any keys with more than
     # one credential add it to the conflict dict.
+    ###############
+    ###############
     for key, data in pair_keys.iteritems():
         if len(data) > 1:
             blind_ids = [k['id'] for k in data
