@@ -95,11 +95,13 @@ def get_client_config():
     #response 변수 리턴
     return response
 
-#service리스트 가져오기 위한 함수
+#service리스트 가져오기 위한 함수 정의
 @app.route('/v1/services', methods=['GET'])
 @authnz.require_auth
 def get_service_list():
+    #services라는 리스트 생성
     services = []
+    #Service.data_type_date_index.query('service')양 만큼의 반복문이 실행되며 리스트에 id,account,enabled,revision,modified_date,modified_by를 추가한다
     for service in Service.data_type_date_index.query('service'):
         services.append({
             'id': service.id,
@@ -109,9 +111,11 @@ def get_service_list():
             'modified_date': service.modified_date,
             'modified_by': service.modified_by
         })
+    #리스트릴 jsonify시켜 리턴해준다.
     return jsonify({'services': services})
 
 
+#iam_roles_list를 가져오기 위한 함수
 @app.route('/v1/roles', methods=['GET'])
 @authnz.require_auth
 def get_iam_roles_list():
@@ -122,6 +126,7 @@ def get_iam_roles_list():
     return jsonify({'roles': roles})
 
 
+#서비스의 메타데이타와 모든 credentials를 가져오기 위한 함수
 @app.route('/v1/services/<id>', methods=['GET'])
 @authnz.require_auth
 def get_service(id):
@@ -129,19 +134,27 @@ def get_service(id):
     Get service metadata and all credentials for this service. This endpoint
     allows basic authentication.
     '''
+    #_init_.py에 정의된 user_is_user_type함수를 통해 service값이라면 제어문 안으로
     if authnz.user_is_user_type('service'):
+        #_init_.py에 정의된 user_is_service함수를 통해 함수의 파라메터 값으로 받아온 id가 아니라면 로그에 'Authz failed for service {0}.', 'Authenticated user is not authorized.'라는 메시지와 함께 401error를 띄운다
         if not authnz.user_is_service(id):
             logging.warning('Authz failed for service {0}.'.format(id))
             msg = 'Authenticated user is not authorized.'
             return jsonify({'error': msg}), 401
     try:
+        #service라는 변수에 id값 대입
         service = Service.get(id)
+        #_init_.py에 정의된 service_in_account함수를 통해 account값이 일치하지 않는다면 제어문 안으로
         if not authnz.service_in_account(service.account):
+            #아래와 같은 로그를 남긴다
             logging.warning(
                 'Authz failed for service {0} (wrong account).'.format(id)
             )
+            #msg에 아래와 같은 문자 대입
             msg = 'Authenticated user is not authorized.'
+            #401error를 msg에 대입된 문자열과 함께 jsonify시켜 리턴
             return jsonify({'error': msg}), 401
+    #위 try문의 코드에 error발생 시 예외처리
     except DoesNotExist:
         return jsonify({}), 404
     if (service.data_type != 'service' and
@@ -149,8 +162,10 @@ def get_service(id):
         return jsonify({}), 404
     logging.debug('Authz succeeded for service {0}.'.format(id))
     try:
+        #credential을 가져온다
         credentials = _get_credentials(service.credentials)
     except KeyError:
+        #error발생 시 500error발생
         logging.exception('KeyError occurred in getting credentials')
         return jsonify({'error': 'Decryption error.'}), 500
     blind_credentials = _get_blind_credentials(service.blind_credentials)
@@ -168,6 +183,7 @@ def get_service(id):
 
 @app.route('/v1/archive/services/<id>', methods=['GET'])
 @authnz.require_auth
+#아카이브 서비스 revision(개정, 정정)가져오기
 def get_archive_service_revisions(id):
     try:
         service = Service.get(id)
@@ -175,16 +191,21 @@ def get_archive_service_revisions(id):
         logging.warning(
             'Item with id {0} does not exist.'.format(id)
         )
+        #아이템 없으 시 404error
         return jsonify({}), 404
+        #자료 형식 service와 일치하지 않을 시 404error
     if (service.data_type != 'service' and
             service.data_type != 'archive-service'):
         return jsonify({}), 404
+    #revision list
     revisions = []
     _range = range(1, service.revision + 1)
     ids = []
     for i in _range:
+        #ids리스트에 id들 _range정의된 범위만큼의 id추가
         ids.append("{0}-{1}".format(id, i))
     for revision in Service.batch_get(ids):
+        #revisions리스트에 ids리스트 크기만큼 아래 내용 추가
         revisions.append({
             'id': revision.id,
             'account': revision.account,
@@ -203,7 +224,7 @@ def get_archive_service_revisions(id):
         )
     })
 
-
+#아카이브 서비스 리스트 가져오기
 @app.route('/v1/archive/services', methods=['GET'])
 @authnz.require_auth
 def get_archive_service_list():
@@ -226,6 +247,7 @@ def get_archive_service_list():
 @authnz.require_auth
 @authnz.require_csrf_token
 @maintenance.check_maintenance_mode
+#안정성 부여 아래 예외처리들로
 def ensure_grants(id):
     try:
         _service = Service.get(id)
