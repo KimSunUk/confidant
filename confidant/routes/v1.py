@@ -565,13 +565,13 @@ def _get_blind_credentials(credential_ids):
             })
     return credentials
 
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#credentials의 key쌍을 얻기 위한 함수 정의
 def _pair_key_conflicts_for_credentials(credential_ids, blind_credential_ids):
     #conflicts, pair_keys 라는 dictionary생성(key-value)
     conflicts = {}
     pair_keys = {}
     # If we don't care about conflicts, return immediately
-    #conflicts에 대하여 상관하지않는다면 즉시 리턴
+    #충돌에 대하여 상관하지않는다면 즉시 리턴
     if app.config['IGNORE_CONFLICTS']:
         return conflicts
     # For all credentials, get their credential pairs and track which
@@ -596,8 +596,7 @@ def _pair_key_conflicts_for_credentials(credential_ids, blind_credential_ids):
                 pair_keys[key] = [data]
     # Iterate the credential pair keys, if there's any keys with more than
     # one credential add it to the conflict dict.
-    ###############
-    ###############
+    #자격증 명 쌍 키 반복, 하나 이상의 credential이있는 키가있는 경우 conflicts dictionary에 추가합니다.
     for key, data in pair_keys.iteritems():
         if len(data) > 1:
             blind_ids = [k['id'] for k in data
@@ -609,7 +608,7 @@ def _pair_key_conflicts_for_credentials(credential_ids, blind_credential_ids):
             }
     return conflicts
 
-
+#credential 서비스 -> 서비스 리스트에 가져오는 함수 정의
 def _get_services_for_credential(_id):
     services = []
     for service in Service.data_type_date_index.query('service'):
@@ -617,7 +616,7 @@ def _get_services_for_credential(_id):
             services.append(service)
     return services
 
-
+#blind_credential 서비스 -> 서비스 리스트에 가져오는 함수 정의
 def _get_services_for_blind_credential(_id):
     services = []
     for service in Service.data_type_date_index.query('service'):
@@ -625,7 +624,7 @@ def _get_services_for_blind_credential(_id):
             services.append(service)
     return services
 
-
+#credential의 쌍을 check하기 위한 함수 정의
 def _check_credential_pair_values(credential_pairs):
     for key, val in credential_pairs.iteritems():
         if isinstance(val, dict) or isinstance(val, list):
@@ -633,11 +632,13 @@ def _check_credential_pair_values(credential_pairs):
             return (False, ret)
     return (True, {})
 
-
+#service_map을 가져오기 위한 함수 정의
 def _get_service_map(services):
     service_map = {}
     for service in services:
+        #credentials를 위한
         for credential in service.credentials:
+            #credential에 service_map이 있다면 append를 통해
             if credential in service_map:
                 service_map[credential]['service_ids'].append(service.id)
             else:
@@ -645,6 +646,7 @@ def _get_service_map(services):
                     'data_type': 'credential',
                     'service_ids': [service.id]
                 }
+        #blind_credentials를 위한 원리는 credentials 와 동일
         for credential in service.blind_credentials:
             if credential in service_map:
                 service_map[credential]['service_ids'].append(service.id)
@@ -655,23 +657,29 @@ def _get_service_map(services):
                 }
     return service_map
 
-
+#services의 key쌍을 얻기 위한 함수 정의
 def _pair_key_conflicts_for_services(_id, credential_keys, services):
     conflicts = {}
     # If we don't care about conflicts, return immediately
+    #충돌에 대해 상관하지 않는다면 즉시 리턴한다.
     if app.config['IGNORE_CONFLICTS']:
         return conflicts
+    #service_map불러오기
     service_map = _get_service_map(services)
     credential_ids = []
     blind_credential_ids = []
     for credential, data in service_map.iteritems():
+        #id,credential매칭
         if _id == credential:
             continue
+        #credential인 경우와 blind_credential인 경우를 나누어서 append
         if data['data_type'] == 'credential':
             credential_ids.append(credential)
         elif data['data_type'] == 'blind-credential':
             blind_credential_ids.append(credential)
+    #credentials 가져오기
     credentials = _get_credentials(credential_ids)
+    #blind_credential_ids추가
     credentials.extend(_get_blind_credentials(blind_credential_ids))
     for credential in credentials:
         services = service_map[credential['id']]['service_ids']
@@ -699,7 +707,7 @@ def _pair_key_conflicts_for_services(_id, credential_keys, services):
                 )
     return conflicts
 
-
+#credential_pairs 소문자로 변경 함수 정의
 def _lowercase_credential_pairs(credential_pairs):
     return {i.lower(): j for i, j in credential_pairs.iteritems()}
 
@@ -708,8 +716,10 @@ def _lowercase_credential_pairs(credential_pairs):
 @authnz.require_auth
 @authnz.require_csrf_token
 @maintenance.check_maintenance_mode
+#credential생성 함수 정의
 def create_credential():
     data = request.get_json()
+    #data들을 받아오지 못한경우 error처리 발생
     if not data.get('documentation') and settings.get('ENFORCE_DOCUMENTATION'):
         return jsonify({'error': 'documentation is a required field'}), 400
     if not data.get('credential_pairs'):
@@ -717,21 +727,29 @@ def create_credential():
     if not isinstance(data.get('metadata', {}), dict):
         return jsonify({'error': 'metadata must be a dict'}), 400
     # Ensure credential pair keys are lowercase
+    # credential pair key들이 소문자인지 안전하게 하기 위해 다시 사용
     credential_pairs = _lowercase_credential_pairs(data['credential_pairs'])
     _check, ret = _check_credential_pair_values(credential_pairs)
+    #check해서 false이면 error발생
     if not _check:
         return jsonify(ret), 400
     for cred in Credential.data_type_date_index.query(
             'credential', name__eq=data['name']):
         # Conflict, the name already exists
+        # 이미 이름이 있는지 점검 있으면 error발생
         msg = 'Name already exists. See id: {0}'.format(cred.id)
         return jsonify({'error': msg, 'reference': cred.id}), 409
     # Generate an initial stable ID to allow name changes
+    # 이름 변경을 허용하기 위해 아래 id만들기
     id = str(uuid.uuid4()).replace('-', '')
     # Try to save to the archive
+    # 아카이브에 저장하기 위해
     revision = 1
+    # credential_pairs json인코딩을 위해
     credential_pairs = json.dumps(credential_pairs)
+    #key 생성
     data_key = keymanager.create_datakey(encryption_context={'id': id})
+    #key암호화(??확실x)
     cipher = CipherManager(data_key['plaintext'], version=2)
     credential_pairs = cipher.encrypt(credential_pairs)
     cred = Credential(
@@ -748,6 +766,7 @@ def create_credential():
         documentation=data.get('documentation')
     ).save(id__null=True)
     # Make this the current revision
+    # 현재 버전으로 만든다
     cred = Credential(
         id=id,
         data_type='credential',
@@ -761,7 +780,9 @@ def create_credential():
         modified_by=authnz.get_logged_in_user(),
         documentation=data.get('documentation')
     )
+    #저장
     cred.save()
+    #마무리 최종 저장된 값들 리턴
     return jsonify({
         'id': cred.id,
         'name': cred.name,
