@@ -798,6 +798,7 @@ def create_credential():
 
 @app.route('/v1/credentials/<id>/services', methods=['GET'])
 @authnz.require_auth
+#credential의 종속물 가져오는 함수정의
 def get_credential_dependencies(id):
     services = _get_services_for_credential(id)
     _services = [{'id': x.id, 'enabled': x.enabled} for x in services]
@@ -810,42 +811,60 @@ def get_credential_dependencies(id):
 @authnz.require_auth
 @authnz.require_csrf_token
 @maintenance.check_maintenance_mode
+#credential 업데이트 하는 함수 정의
 def update_credential(id):
+    #credentialid가져오는 중 없을 경우 error발생 예외처리
     try:
         _cred = Credential.get(id)
     except DoesNotExist:
         return jsonify({'error': 'Credential not found.'}), 404
+    #자료의 종류가 credential인지 아닌지 check 아닐 경우 error msg와 함께 리턴
     if _cred.data_type != 'credential':
         msg = 'id provided is not a credential.'
         return jsonify({'error': msg}), 400
+    #데이터 갖고온다
     data = request.get_json()
+    #update라는 dictionary생성
     update = {}
+    #가장 최근의 revision을 가져온다
     revision = _get_latest_credential_revision(id, _cred.revision)
+    #이름 업데이트
     update['name'] = data.get('name', _cred.name)
+    #data에 'enabled'이 있을 경우 제어문 안으로
     if 'enabled' in data:
+        #허용 안되는 부분이 bool 인스턴스가 아니라면 error발생
         if not isinstance(data['enabled'], bool):
             return jsonify({'error': 'Enabled must be a boolean.'}), 400
+        #'enabled'data 대입
         update['enabled'] = data['enabled']
     else:
+        #data에 없다면 _cred에서 대입
         update['enabled'] = _cred.enabled
+    #metadata가 dictionary타입이 아닌 경우 error발생
     if not isinstance(data.get('metadata', {}), dict):
         return jsonify({'error': 'metadata must be a dict'}), 400
+    #credential의 서비스 가져오기
     services = _get_services_for_credential(id)
+    #data에 credential_pairs가 있다면 제어문 안으로
     if 'credential_pairs' in data:
         # Ensure credential pair keys are lowercase
+        # credential pair key가 소문자인지 확실하게 하기 위해 소문자로 만드는 함수를 사용해 credential_pairs가져오기
         credential_pairs = _lowercase_credential_pairs(
             data['credential_pairs']
         )
+        #확인하기 위해 확인 값 가져오기
         _check, ret = _check_credential_pair_values(credential_pairs)
+        #확인
         if not _check:
             return jsonify(ret), 400
-        # Ensure credential pairs don't conflicts with pairs from other
-        # services
+        # Ensure credential pairs don't conflicts with pairs from other services
+        # 다른 서비스와 충돌하지 않는지 확인
         conflicts = _pair_key_conflicts_for_services(
             id,
             credential_pairs.keys(),
             services
         )
+        # 충돌한다면 error발생
         if conflicts:
             ret = {
                 'error': 'Conflicting key pairs in mapped service.',
@@ -853,7 +872,9 @@ def update_credential(id):
             }
             return jsonify(ret), 400
         update['credential_pairs'] = json.dumps(credential_pairs)
+    #data에 credential_pairs가 없다면 제어문 안으로
     else:
+    #key생성
         data_key = keymanager.decrypt_datakey(
             _cred.data_key,
             encryption_context={'id': id}
@@ -867,11 +888,13 @@ def update_credential(id):
     update['metadata'] = data.get('metadata', _cred.metadata)
     update['documentation'] = data.get('documentation', _cred.documentation)
     # Enforce documentation, EXCEPT if we are restoring an old revision
+    #오래된 버전을 복원 중이지 않는 이상 문서 실행
     if (not update['documentation'] and
             settings.get('ENFORCE_DOCUMENTATION') and
             not data.get('revision')):
         return jsonify({'error': 'documentation is a required field'}), 400
     # Try to save to the archive
+    # 아카이브 저장을 위한 try문
     try:
         Credential(
             id='{0}-{1}'.format(id, revision),
@@ -913,6 +936,7 @@ def update_credential(id):
         msg = msg.format(cred.name, cred.id, cred.revision)
         graphite.send_event(service_names, msg)
         webhook.send_event('credential_update', service_names, [cred.id])
+    #update된 내용 리턴
     return jsonify({
         'id': cred.id,
         'name': cred.name,
@@ -928,6 +952,7 @@ def update_credential(id):
 
 @app.route('/v1/blind_credentials', methods=['GET'])
 @authnz.require_auth
+# blind credential list가져오는 함수 정의
 def get_blind_credential_list():
     blind_credentials = []
     for cred in BlindCredential.data_type_date_index.query('blind-credential'):
@@ -945,7 +970,9 @@ def get_blind_credential_list():
 
 @app.route('/v1/blind_credentials/<id>', methods=['GET'])
 @authnz.require_auth
+# blind credential 가져오는 함수 정의
 def get_blind_credential(id):
+    #id로 부터 가져오는 try문 중 error발생 시 예외처리
     try:
         cred = BlindCredential.get(id)
     except DoesNotExist:
@@ -953,6 +980,7 @@ def get_blind_credential(id):
             'Item with id {0} does not exist.'.format(id)
         )
         return jsonify({}), 404
+    # 자료 형식 일치하지 않을 시 error
     if (cred.data_type != 'blind-credential' and
             cred.data_type != 'archive-blind-credential'):
         return jsonify({}), 404
@@ -972,7 +1000,7 @@ def get_blind_credential(id):
         'documentation': cred.documentation
     })
 
-
+#최근의 credential의 revision 가져오는 함수 정의
 def _get_latest_credential_revision(id, revision):
     i = revision + 1
     while True:
@@ -983,7 +1011,7 @@ def _get_latest_credential_revision(id, revision):
             return i
         i = i + 1
 
-
+#최근의 blind credential의 revision 가져오는 함수 정의
 def _get_latest_blind_credential_revision(id, revision):
     i = revision + 1
     while True:
@@ -997,11 +1025,14 @@ def _get_latest_blind_credential_revision(id, revision):
 
 @app.route('/v1/archive/blind_credentials/<id>', methods=['GET'])
 @authnz.require_auth
+#아카이브 blind credential revision들을 가져오는 함수 정의
 def get_archive_blind_credential_revisions(id):
+    #해당 id의 blind_credential 가져오는 try문 없을 경우 예외처리
     try:
         cred = BlindCredential.get(id)
     except DoesNotExist:
         return jsonify({}), 404
+    #자료 형식이 'blind-credential', 'archive-blind-credential'이 아닌 경우 warning
     if (cred.data_type != 'blind-credential' and
             cred.data_type != 'archive-blind-credential'):
         logging.warning(
@@ -1011,6 +1042,7 @@ def get_archive_blind_credential_revisions(id):
     revisions = []
     _range = range(1, cred.revision + 1)
     ids = []
+    #ids에 revisions들 추가
     for i in _range:
         ids.append("{0}-{1}".format(id, i))
     for revision in BlindCredential.batch_get(ids):
@@ -1029,6 +1061,7 @@ def get_archive_blind_credential_revisions(id):
             'modified_by': cred.modified_by,
             'documentation': cred.documentation
         })
+    #jsonify 시켜 revisions리턴
     return jsonify({
         'revisions': sorted(
             revisions,
@@ -1040,6 +1073,7 @@ def get_archive_blind_credential_revisions(id):
 
 @app.route('/v1/archive/blind_credentials', methods=['GET'])
 @authnz.require_auth
+#아카이브 blind credential list 가져오는 함수 정의
 def get_archive_blind_credential_list():
     blind_credentials = []
     for cred in BlindCredential.data_type_date_index.query(
@@ -1066,9 +1100,11 @@ def get_archive_blind_credential_list():
 @authnz.require_auth
 @authnz.require_csrf_token
 @maintenance.check_maintenance_mode
+#blind_credential생성하는 함수정의
 def create_blind_credential():
     data = request.get_json()
     missing = []
+    ######################################################################
     required_args = ['cipher_version', 'cipher_type', 'credential_pairs',
                      'data_key']
     if settings.get('ENFORCE_DOCUMENTATION'):
@@ -1093,11 +1129,13 @@ def create_blind_credential():
     for cred in BlindCredential.data_type_date_index.query(
             'blind-credential', name__eq=data['name']):
         # Conflict, the name already exists
+        #이름이 이미 존제 할 시 충돌 발생
         msg = 'Name already exists. See id: {0}'.format(cred.id)
         return jsonify({'error': msg, 'reference': cred.id}), 409
     # Generate an initial stable ID to allow name changes
     id = str(uuid.uuid4()).replace('-', '')
     # Try to save to the archive
+    # 아카이브 저장 시도
     revision = 1
     cred = BlindCredential(
         id='{0}-{1}'.format(id, revision),
@@ -1115,6 +1153,7 @@ def create_blind_credential():
         documentation=data.get('documentation')
     ).save(id__null=True)
     # Make this the current revision
+    # 현재 버전으로 만든다
     cred = BlindCredential(
         id=id,
         data_type='blind-credential',
@@ -1130,7 +1169,9 @@ def create_blind_credential():
         modified_by=authnz.get_logged_in_user(),
         documentation=data.get('documentation')
     )
+    #저장
     cred.save()
+    #최종 저장된 값들을 리턴
     return jsonify({
         'id': cred.id,
         'name': cred.name,
@@ -1150,6 +1191,7 @@ def create_blind_credential():
 
 @app.route('/v1/blind_credentials/<id>/services', methods=['GET'])
 @authnz.require_auth
+# blind credential dependencies 가져오는 함수 정의
 def get_blind_credential_dependencies(id):
     services = _get_services_for_blind_credential(id)
     _services = [{'id': x.id, 'enabled': x.enabled} for x in services]
@@ -1162,6 +1204,7 @@ def get_blind_credential_dependencies(id):
 @authnz.require_auth
 @authnz.require_csrf_token
 @maintenance.check_maintenance_mode
+#blind_credential 업데이트 하는 함수 정의 (방법은 credential업데이트와 비슷)
 def update_blind_credential(id):
     try:
         _cred = BlindCredential.get(id)
@@ -1296,6 +1339,7 @@ def update_blind_credential(id):
 
 
 @app.route('/v1/value_generator', methods=['GET'])
+#kms값 생성하는 함수 정의
 def generate_value():
     value = kms_client.generate_random(NumberOfBytes=128)['Plaintext']
     value = base64.urlsafe_b64encode(value)
