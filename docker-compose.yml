@@ -1,8 +1,9 @@
 confidant:
-  image: lyft/confidant
-  #build: .
-  #volumes:
+  #image: lyft/confidant
+  build: .
+  volumes:
   #  - .:/srv/confidant:rw
+    - ./temp/confidant
   ports:
    - "80:80"
   links:
@@ -18,7 +19,8 @@ redis:
   image: redis
 dynamo:
   volumes:
-    - /mnt/dynamo:/mnt/dynamo:rw,Z
+    # - /mnt/dynamo:/mnt/dynamo:rw,Z
+    - ./data
   ports:
     - "7777:7777"
   image: tray/dynamodb-local
